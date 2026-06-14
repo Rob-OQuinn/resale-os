@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Resale OS</title>
+<title>R&T Resale OS</title>
 <style>
 :root {
   --pink: #e75480; --teal: #20b2aa;
@@ -129,13 +129,13 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 <body>
 
 <div class="topnav">
-  <div><div class="os-title">Resale OS</div><div class="os-sub">Your complete resale business</div></div>
+  <div><div class="os-title">R&T Resale OS</div><div class="os-sub">Your complete resale business</div></div>
   <div class="sync-pill"><span class="sync-dot"></span>Live</div>
 </div>
 
 <!-- SCREENS -->
 <div class="screen active" id="screen-home">
-  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>,👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
+  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>, Rob 👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
   <div class="quick-stats" id="homeStats"></div>
   <div class="tools-label">Tools</div>
   <div class="tools-grid">
@@ -174,19 +174,21 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 
 <div class="screen" id="screen-reports">
   <div class="sec-title">📄 Reports & Export</div>
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="chip" onclick="setRP('week')">This Week</button>
-      <button class="chip" onclick="setRP('month')">This Month</button>
-      <button class="chip" onclick="setRP('quarter')">This Quarter</button>
-      <button class="chip" onclick="setRP('year')">This Year</button>
-      <button class="chip" onclick="setRP('all')">All Time</button>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Select Period</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <button class="chip" style="text-align:center;padding:9px 8px" onclick="setRP('week')">This Week</button>
+      <button class="chip" style="text-align:center;padding:9px 8px" onclick="setRP('month')">This Month</button>
+      <button class="chip" style="text-align:center;padding:9px 8px" onclick="setRP('quarter')">This Quarter</button>
+      <button class="chip" style="text-align:center;padding:9px 8px" onclick="setRP('year')">This Year</button>
+      <button class="chip" style="text-align:center;padding:9px 8px;grid-column:1/-1" onclick="setRP('all')">All Time</button>
     </div>
-    <div class="fr2">
-      <div class="fg"><label class="fl">From</label><input type="date" class="fi" id="rFrom"></div>
-      <div class="fg"><label class="fl">To</label><input type="date" class="fi" id="rTo"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Custom Range</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div><label class="fl">From</label><input type="date" class="fi" id="rFrom" style="font-size:13px"></div>
+      <div><label class="fl">To</label><input type="date" class="fi" id="rTo" style="font-size:13px"></div>
     </div>
-    <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+    <button class="btn btn-primary" onclick="generateReport()" style="border-radius:12px;font-size:15px;padding:14px">Generate Report</button>
   </div>
   <div id="reportOut" style="display:none">
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">
@@ -249,6 +251,8 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
       <div class="fg"><label class="fl">Sold Price ($)</label><input class="fi" type="number" id="s-price"></div>
       <div class="fg"><label class="fl">Sold On</label><select class="fi" id="s-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option></select></div>
     </div>
+    <div class="fg"><label class="fl">Tracking Number (optional)</label><input class="fi" id="s-tracking" placeholder="e.g. 9400111899223456789012"></div>
+    <div class="fg"><label class="fl">Carrier</label><select class="fi" id="s-carrier"><option value="">— Select if tracking added —</option><option>USPS</option><option>UPS</option><option>FedEx</option><option>Mercari Shipping</option><option>eBay Shipping</option><option>Poshmark Shipping</option></select></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('sellModal')">Cancel</button>
       <button class="btn btn-green" onclick="confirmSell()">Confirm Sale 🎉</button>
@@ -332,6 +336,7 @@ function renderInventory() {
         <span>📂 ${item.category}</span><span>📍 ${item.source}</span><span>🛒 ${item.soldPlatform || item.platform}</span>
         ${item.condition ? `<span>⭐ ${item.condition}</span>` : ''}
         ${item.notes ? `<span>📝 ${item.notes.slice(0,35)}${item.notes.length > 35 ? '...' : ''}</span>` : ''}
+        ${item.trackingNumber ? `<span style="color:var(--teal)">📦 ${item.carrier ? item.carrier+': ' : ''}${item.trackingNumber}</span>` : ''}
       </div>
       <div class="inv-actions">
         ${item.status === 'bought' ? `<button class="btn btn-sm btn-blue" onclick="markListed(${item.id})">Mark Listed</button>` : ''}
@@ -356,8 +361,33 @@ function saveItem() {
   saveData(); closeModal('addModal'); renderInventory(); renderHome(); showToast('✅ Item added!');
 }
 function markListed(id) { const i = inventory.find(x => x.id === id); if (i) { i.status = 'listed'; saveData(); renderInventory(); showToast('📋 Marked as listed'); } }
-function openSellModal(id) { const i = inventory.find(x => x.id === id); if (!i) return; sellTargetId = id; document.getElementById('s-price').value = i.listPrice || ''; document.getElementById('s-plat').value = i.platform || 'eBay'; document.getElementById('sellInfo').innerHTML = `Selling: <strong style="color:var(--teal)">${i.name}</strong><br><span style="color:var(--muted);font-size:12px">Bought for $${i.buyPrice} · Listed at $${i.listPrice || '—'}</span>`; document.getElementById('sellModal').classList.add('open'); }
-function confirmSell() { const i = inventory.find(x => x.id === sellTargetId); if (!i) return; const sp = parseFloat(document.getElementById('s-price').value) || 0; i.soldPrice = sp; i.soldPlatform = document.getElementById('s-plat').value; i.status = 'sold'; i.dateSold = new Date().toISOString(); saveData(); closeModal('sellModal'); renderInventory(); renderHome(); showToast(`🎉 Sold! +$${(sp - i.buyPrice).toFixed(2)} profit`); }
+function openSellModal(id) {
+  const i = inventory.find(x => x.id === id);
+  if (!i) return;
+  sellTargetId = id;
+  document.getElementById('s-price').value = i.listPrice || '';
+  document.getElementById('s-plat').value = i.platform || 'eBay';
+  document.getElementById('s-tracking').value = '';
+  document.getElementById('s-carrier').value = '';
+  document.getElementById('sellInfo').innerHTML = `Selling: <strong style="color:var(--teal)">${i.name}</strong><br><span style="color:var(--muted);font-size:12px">Bought for $${i.buyPrice} · Listed at $${i.listPrice || '—'}</span>`;
+  document.getElementById('sellModal').classList.add('open');
+}
+function confirmSell() {
+  const i = inventory.find(x => x.id === sellTargetId);
+  if (!i) return;
+  const sp = parseFloat(document.getElementById('s-price').value) || 0;
+  i.soldPrice = sp;
+  i.soldPlatform = document.getElementById('s-plat').value;
+  i.trackingNumber = document.getElementById('s-tracking').value.trim();
+  i.carrier = document.getElementById('s-carrier').value;
+  i.status = 'sold';
+  i.dateSold = new Date().toISOString();
+  saveData();
+  closeModal('sellModal');
+  renderInventory();
+  renderHome();
+  showToast(`🎉 Sold! +$${(sp - i.buyPrice).toFixed(2)} profit`);
+}
 function deleteItem(id) { if (!confirm('Delete this item?')) return; inventory = inventory.filter(i => i.id !== id); saveData(); renderInventory(); renderHome(); }
 
 // ── TOOL PANEL ────────────────────────────────────────────────────────────────
@@ -501,15 +531,65 @@ function showRadar(cat, btn) {
 
 // ── LISTING GENERATOR ─────────────────────────────────────────────────────────
 function buildListing() {
-  return `<div class="fg"><label class="fl">Describe what you found</label><textarea class="fi" id="ld" rows="3" placeholder="e.g. Vintage Coach leather bag, dark brown, brass hardware, Made in USA stamp inside..."></textarea></div>
+  return `
+    <div class="fg"><label class="fl">Describe what you found</label><textarea class="fi" id="ld" rows="3" placeholder="e.g. Vintage Coach leather bag, dark brown, brass hardware, Made in USA stamp inside..."></textarea></div>
     <div class="fr2">
       <div class="fg"><label class="fl">Category</label><select class="fi" id="lcat"><option>Electronics</option><option>Disney</option><option selected>Designer</option><option>Toys</option><option>Antiques</option><option>Jewelry</option><option>Other</option></select></div>
       <div class="fg"><label class="fl">Platform</label><select class="fi" id="lplat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option></select></div>
     </div>
     <div class="fr2">
-      <div class="fg"><label class="fl">Condition</label><select class="fi" id="lcond"><option>Excellent</option><option selected>Good</option><option>Fair</option><option>For Parts</option></select></div>
+      <div class="fg"><label class="fl">Condition</label><select class="fi" id="lcond"><option>Excellent — Like New</option><option selected>Good — Minor Wear</option><option>Fair — Visible Wear</option><option>For Parts / Repair</option></select></div>
       <div class="fg"><label class="fl">Price ($)</label><input class="fi" type="number" id="lprice" placeholder="45"></div>
     </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">📦 Shipping Options</div>
+      <div class="fg"><label class="fl">Ships Within</label>
+        <select class="fi" id="lship">
+          <option value="same">Same business day if ordered by noon</option>
+          <option value="1" selected>1 business day</option>
+          <option value="2">2 business days</option>
+          <option value="3">3 business days</option>
+          <option value="local">Local pickup only — no shipping</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="lfree" style="accent-color:var(--teal);width:16px;height:16px"> Free shipping included
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="lbundle" checked style="accent-color:var(--teal);width:16px;height:16px"> Mention bundle discount
+        </label>
+      </div>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">↩️ Returns Policy</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <input type="radio" name="lreturns" value="yes" style="accent-color:var(--teal);width:16px;height:16px"> Returns accepted within 30 days
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <input type="radio" name="lreturns" value="no" checked style="accent-color:var(--teal);width:16px;height:16px"> No returns — all sales final
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <input type="radio" name="lreturns" value="none" style="accent-color:var(--teal);width:16px;height:16px"> Don't mention returns
+        </label>
+      </div>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">✅ Include In Listing</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-smoke" checked style="accent-color:var(--teal);width:16px;height:16px"> Smoke-free home</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-pet" checked style="accent-color:var(--teal);width:16px;height:16px"> Pet-free home</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-photos" checked style="accent-color:var(--teal);width:16px;height:16px"> Offer more photos</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-combined" checked style="accent-color:var(--teal);width:16px;height:16px"> Combined shipping</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-careful" checked style="accent-color:var(--teal);width:16px;height:16px"> Careful packaging</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="lopt-tracking" checked style="accent-color:var(--teal);width:16px;height:16px"> Tracking included</label>
+      </div>
+    </div>
+
     <button class="btn btn-primary" onclick="genListing()">Generate Listing ✨</button>
     <div id="listOut"></div>`;
 }
@@ -520,17 +600,79 @@ function genListing() {
   const plat = document.getElementById('lplat').value;
   const cond = document.getElementById('lcond').value;
   const price = document.getElementById('lprice').value;
+
+  // Shipping options
+  const shipVal = document.getElementById('lship').value;
+  const shipMap = {same:'Same business day if ordered by noon',1:'1 business day',2:'2 business days',3:'3 business days',local:'Local pickup only — no shipping'};
+  const shipText = shipMap[shipVal] || '1 business day';
+  const freeShip = document.getElementById('lfree').checked;
+  const bundle = document.getElementById('lbundle').checked;
+
+  // Returns
+  const returnsVal = document.querySelector('input[name="lreturns"]:checked')?.value || 'no';
+  const returnsText = returnsVal === 'yes' ? 'Returns accepted within 30 days.' : returnsVal === 'no' ? 'All sales are final — no returns.' : '';
+
+  // Include options
+  const smoke = document.getElementById('lopt-smoke').checked;
+  const pet = document.getElementById('lopt-pet').checked;
+  const photos = document.getElementById('lopt-photos').checked;
+  const combined = document.getElementById('lopt-combined').checked;
+  const careful = document.getElementById('lopt-careful').checked;
+  const tracking = document.getElementById('lopt-tracking').checked;
+
   const prefixes = {Electronics:'Vintage ',Disney:'Disney ',Designer:'Authentic ',Toys:'Vintage ',Antiques:'Antique ',Jewelry:'Vintage ',Other:''};
-  const condShort = {Excellent:'EUC',Good:'GUC',Fair:'Fair','For Parts':'Parts'};
+  const condShort = {'Excellent — Like New':'EUC','Good — Minor Wear':'GUC','Fair — Visible Wear':'Fair','For Parts / Repair':'Parts'};
   const kws = {Electronics:'vintage retro working tested original',Disney:'disney collectible rare HTF authentic',Designer:'authentic genuine leather designer vintage',Toys:'vintage complete all pieces tested',Antiques:'antique vintage collectible original',Jewelry:'sterling genuine vintage signed authentic',Other:'vintage authentic original'};
+
   const title = `${prefixes[cat]||''}${desc.split(' ').slice(0,6).join(' ')} ${condShort[cond]||''}`.trim().slice(0,80);
-  const shippingLine = {eBay:'Ships within 1 business day. Returns accepted.',Mercari:'Fast shipping! Bundle for a discount.',Poshmark:'Ships same or next day. Smoke-free home. Bundle and save!',Etsy:'Carefully wrapped, ships within 2 business days.','Facebook Marketplace':'Local pickup preferred. Cash or Venmo.'}[plat];
-  const body = `✨ ${desc}\n\nCondition: ${cond}.\nFrom a smoke-free, pet-free home.\n\n${shippingLine}\n\nQuestions? Message me anytime — happy to send more photos!`;
+
+  // Build description dynamically
+  let lines = [];
+  lines.push(`✨ ${desc}`);
+  lines.push('');
+  lines.push(`Condition: ${cond}.`);
+
+  // Home environment
+  const homeNotes = [smoke ? 'smoke-free' : '', pet ? 'pet-free' : ''].filter(Boolean);
+  if (homeNotes.length) lines.push(`From a ${homeNotes.join(', ')} home.`);
+
+  lines.push('');
+
+  // Shipping block
+  if (plat === 'Facebook Marketplace') {
+    lines.push('Local pickup preferred. Cash, Venmo, or Zelle accepted.');
+  } else {
+    lines.push(`Ships within ${shipText}.`);
+    if (freeShip) lines.push('Free shipping included!');
+    if (careful) lines.push('Items are carefully packaged to arrive safely.');
+    if (tracking) lines.push('Tracking number provided after shipment.');
+    if (combined) lines.push('Combined shipping available on multiple purchases.');
+    if (bundle) lines.push('Bundle with other items in my store for a discount!');
+  }
+
+  lines.push('');
+  if (returnsText) lines.push(returnsText);
+  if (photos) lines.push('Questions? Message me anytime — happy to send additional photos!');
+
+  const body = lines.join('\n');
+
   document.getElementById('listOut').innerHTML = `
     <div class="out-box">
-      <div style="margin-bottom:12px"><div class="out-lbl">📌 Title (${title.length}/80)</div><div class="out-hl" id="genTitle">${title}</div><button class="btn btn-sm btn-outline" onclick="copyEl('genTitle')">Copy Title</button></div>
-      <div style="margin-bottom:12px"><div class="out-lbl">📝 Description</div><div class="out-hl" id="genBody">${body}</div><button class="btn btn-sm btn-outline" onclick="copyEl('genBody')">Copy Description</button></div>
-      <div><div class="out-lbl">🏷️ Keywords</div><div style="font-size:12px;color:var(--teal)">${kws[cat]||kws.Other}</div></div>
+      <div style="margin-bottom:14px">
+        <div class="out-lbl">📌 Title (${title.length}/80 chars)</div>
+        <div class="out-hl" id="genTitle">${title}</div>
+        <button class="btn btn-sm btn-outline" onclick="copyEl('genTitle')">Copy Title</button>
+      </div>
+      <div style="margin-bottom:14px">
+        <div class="out-lbl">📝 Description</div>
+        <div class="out-hl" id="genBody">${body}</div>
+        <button class="btn btn-sm btn-outline" onclick="copyEl('genBody')">Copy Description</button>
+      </div>
+      <div style="margin-bottom:8px">
+        <div class="out-lbl">🏷️ Keywords to Add</div>
+        <div style="font-size:12px;color:var(--teal);line-height:1.8">${(kws[cat]||kws.Other).split(' ').join(' · ')}</div>
+      </div>
+      ${price ? `<div style="background:rgba(74,222,128,0.08);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--green)">💰 List at <strong>$${price}</strong>${freeShip?' with free shipping':''}</div>` : ''}
     </div>`;
 }
 function copyEl(id) { const el = document.getElementById(id); if (!el) return; navigator.clipboard.writeText(el.textContent).then(() => showToast('📋 Copied!')).catch(() => showToast('Select text manually to copy')); }
@@ -872,7 +1014,7 @@ function generateReport() {
 }
 function exportCSV() {
   const d = window._rdata; if (!d) return;
-  const rows = [['R&T Resale OS — P&L Report'],[`Period: ${d.from.toLocaleDateString()} to ${d.to.toLocaleDateString()}`],[],['SUMMARY'],['Total Revenue','$'+d.rev.toFixed(2)],['Cost of Goods Sold','$'+d.cogs.toFixed(2)],['Net Profit','$'+d.profit.toFixed(2)],['ROI',d.roi+'%'],[],['SOLD ITEMS'],['Item','Category','Condition','Source','Platform','Date Sold','Buy Price','Sell Price','Profit'],...d.sold.map(i=>[i.name,i.category,i.condition,i.source,i.soldPlatform||'',i.dateSold?new Date(i.dateSold).toLocaleDateString():'',i.buyPrice,i.soldPrice,(i.soldPrice-i.buyPrice).toFixed(2)]),[],['UNSOLD INVENTORY'],['Item','Category','Status','Source','Platform','Date Added','Buy Price','List Price','Days'],...d.unsold.map(i=>[i.name,i.category,i.status,i.source,i.platform,new Date(i.dateAdded).toLocaleDateString(),i.buyPrice,i.listPrice||'',Math.floor((new Date()-new Date(i.dateAdded))/86400000)])];
+  const rows = [['R&T Resale OS — P&L Report'],[`Period: ${d.from.toLocaleDateString()} to ${d.to.toLocaleDateString()}`],[],['SUMMARY'],['Total Revenue','$'+d.rev.toFixed(2)],['Cost of Goods Sold','$'+d.cogs.toFixed(2)],['Net Profit','$'+d.profit.toFixed(2)],['ROI',d.roi+'%'],[],['SOLD ITEMS'],['Item','Category','Condition','Source','Platform','Date Sold','Buy Price','Sell Price','Profit','Carrier','Tracking Number'],...d.sold.map(i=>[i.name,i.category,i.condition,i.source,i.soldPlatform||'',i.dateSold?new Date(i.dateSold).toLocaleDateString():'',i.buyPrice,i.soldPrice,(i.soldPrice-i.buyPrice).toFixed(2),i.carrier||'',i.trackingNumber||'']),[],['UNSOLD INVENTORY'],['Item','Category','Status','Source','Platform','Date Added','Buy Price','List Price','Days'],...d.unsold.map(i=>[i.name,i.category,i.status,i.source,i.platform,new Date(i.dateAdded).toLocaleDateString(),i.buyPrice,i.listPrice||'',Math.floor((new Date()-new Date(i.dateAdded))/86400000)])];
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
