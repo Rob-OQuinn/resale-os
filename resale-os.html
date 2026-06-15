@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Resale OS</title>
+<title>R&T Resale OS</title>
 <style>
 :root {
   --pink: #e75480; --teal: #20b2aa;
@@ -129,13 +129,13 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 <body>
 
 <div class="topnav">
-  <div><div class="os-title">Resale OS</div><div class="os-sub">Resale business operating system</div></div>
+  <div><div class="os-title">R&T Resale OS</div><div class="os-sub">Resale business operating system</div></div>
   <div class="sync-pill"><span class="sync-dot"></span>Live</div>
 </div>
 
 <!-- SCREENS -->
 <div class="screen active" id="screen-home">
-  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>!</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
+  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>, Rob 👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
   <div class="quick-stats" id="homeStats"></div>
   <div class="tools-label">Tools</div>
   <div class="tools-grid">
@@ -1007,7 +1007,7 @@ function generateReport() {
   document.getElementById('rCat').innerHTML = cats.length ? cats.map(cat => { const ci = sold.filter(i => i.category===cat); const cp = ci.reduce((s,i) => s+(i.soldPrice-i.buyPrice),0); return `<div class="recent-item"><div><div style="font-size:13px;font-weight:600">${cat}</div><div style="font-size:11px;color:var(--muted)">${ci.length} items</div></div><div style="color:var(--green);font-weight:700">$${cp.toFixed(2)}</div></div>`; }).join('') : '<p style="color:var(--muted);font-size:13px">No sales yet</p>';
   const plats = [...new Set(sold.map(i => i.soldPlatform).filter(Boolean))];
   document.getElementById('rPlat').innerHTML = plats.length ? plats.map(p => { const pi = sold.filter(i => i.soldPlatform===p); const pp = pi.reduce((s,i) => s+(i.soldPrice-i.buyPrice),0); return `<div class="recent-item"><div><div style="font-size:13px;font-weight:600">${p}</div><div style="font-size:11px;color:var(--muted)">${pi.length} sales</div></div><div style="color:var(--green);font-weight:700">$${pp.toFixed(2)}</div></div>`; }).join('') : '<p style="color:var(--muted);font-size:13px">No sales yet</p>';
-  document.getElementById('rItems').innerHTML = sold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Sold</th><th>Profit</th><th>Platform</th></tr></thead><tbody>${sold.map(i => `<tr><td style="font-weight:600">${i.name}</td><td>$${i.buyPrice}</td><td>$${i.soldPrice}</td><td style="color:var(--green);font-weight:700">$${(i.soldPrice-i.buyPrice).toFixed(2)}</td><td>${i.soldPlatform||'—'}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No items sold yet</p>';
+  document.getElementById('rItems').innerHTML = sold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Sold</th><th>Profit</th><th>Platform</th><th>Tracking</th></tr></thead><tbody>${sold.map(i => `<tr><td style="font-weight:600">${i.name}</td><td>$${i.buyPrice}</td><td>$${i.soldPrice}</td><td style="color:var(--green);font-weight:700">$${(i.soldPrice-i.buyPrice).toFixed(2)}</td><td>${i.soldPlatform||'—'}</td><td style="font-size:11px;color:var(--teal)">${i.trackingNumber ? (i.carrier ? i.carrier+': ' : '')+i.trackingNumber : '—'}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No items sold yet</p>';
   document.getElementById('rUnsold').innerHTML = unsold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Status</th><th>Days</th></tr></thead><tbody>${unsold.map(i => { const days = Math.floor((new Date()-new Date(i.dateAdded))/86400000); return `<tr><td style="font-weight:600">${i.name}</td><td>$${i.buyPrice}</td><td>${i.status}</td><td style="color:${days>30?'var(--red)':days>14?'#fcd34d':'var(--muted)'};font-weight:700">${days}d</td></tr>`; }).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No unsold inventory</p>';
   document.getElementById('reportOut').style.display = 'block';
   window._rdata = {sold, unsold, rev, cogs, profit, roi, from, to};
