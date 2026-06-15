@@ -130,12 +130,15 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 
 <div class="topnav">
   <div><div class="os-title">Resale OS</div><div class="os-sub">Resale business operating system</div></div>
-  <div class="sync-pill"><span class="sync-dot"></span>Live</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="sync-pill"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
+    <button onclick="manualRefresh()" style="background:rgba(255,255,255,0.15);border:none;border-radius:20px;padding:4px 10px;font-size:11px;color:#fff;font-weight:600;cursor:pointer">↻ Sync</button>
+  </div>
 </div>
 
 <!-- SCREENS -->
 <div class="screen active" id="screen-home">
-  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>!</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
+  <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>! 👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
   <div class="quick-stats" id="homeStats"></div>
   <div class="tools-label">Tools</div>
   <div class="tools-grid">
@@ -269,14 +272,124 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 
 <script>
 // ── DATA ──────────────────────────────────────────────────────────────────────
-const KEY = 'rt-resale-os-v2';
+const LOCAL_KEY = 'rt-resale-os-v2';
 let inventory = [];
 let currentFilter = 'all';
 let sellTargetId = null;
+let unsubscribe = null;
+let firebaseReady = false;
+let inventoryCol = null;
 
-function loadData() { try { inventory = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { inventory = []; } }
-function saveData() { localStorage.setItem(KEY, JSON.stringify(inventory)); showToast('Saved ✓'); }
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+function setSync(status) {
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  if (!dot || !label) return;
+  if (status === 'live') { dot.style.background = '#4ade80'; label.textContent = 'Live'; }
+  else if (status === 'saving') { dot.style.background = '#f59e0b'; label.textContent = 'Saving...'; }
+  else if (status === 'local') { dot.style.background = '#94a3b8'; label.textContent = 'Local'; }
+  else { dot.style.background = '#f87171'; label.textContent = 'Offline'; }
+}
+
+// ── LOCAL FALLBACK ────────────────────────────────────────────────────────────
+function saveLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(inventory)); } catch(e) {} }
+function loadLocal() { try { inventory = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch(e) { inventory = []; } }
+
+// ── FIREBASE (loads async, graceful fallback) ─────────────────────────────────
+function initFirebase() {
+  try {
+    const script1 = document.createElement('script');
+    script1.src = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+    script1.onload = () => {
+      const script2 = document.createElement('script');
+      script2.src = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js';
+      script2.onload = () => {
+        try {
+          const firebaseConfig = {
+            apiKey: "AIzaSyCcOPC1pSFUEMTwzrhfqmmq-CK4P0qwTsM",
+            authDomain: "rt-resale.firebaseapp.com",
+            projectId: "rt-resale",
+            storageBucket: "rt-resale.firebasestorage.app",
+            messagingSenderId: "1095183767350",
+            appId: "1:1095183767350:web:87fdf4df72216b22400597"
+          };
+          if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+          const db = firebase.firestore();
+          inventoryCol = db.collection('inventory');
+          firebaseReady = true;
+          startSync();
+        } catch(e) { fallbackToLocal(); }
+      };
+      script2.onerror = fallbackToLocal;
+      document.head.appendChild(script2);
+    };
+    script1.onerror = fallbackToLocal;
+    document.head.appendChild(script1);
+  } catch(e) { fallbackToLocal(); }
+}
+
+function fallbackToLocal() {
+  firebaseReady = false;
+  loadLocal();
+  renderInventory();
+  renderHome();
+  setSync('local');
+  showToast('Running in local mode');
+}
+
+async function saveItem_db(item) {
+  // Always update local array and local storage immediately
+  const idx = inventory.findIndex(x => x.id === item.id);
+  if (idx >= 0) inventory[idx] = item; else inventory.unshift(item);
+  saveLocal();
+  renderInventory();
+  renderHome();
+  if (!firebaseReady || !inventoryCol) return;
+  setSync('saving');
+  try {
+    await inventoryCol.doc(String(item.id)).set(item);
+    setSync('live');
+  } catch(e) { showToast('⚠️ Cloud save failed'); setSync('offline'); }
+}
+
+async function deleteItem_db(id) {
+  inventory = inventory.filter(i => i.id !== id);
+  saveLocal();
+  renderInventory();
+  renderHome();
+  if (!firebaseReady || !inventoryCol) return;
+  setSync('saving');
+  try {
+    await inventoryCol.doc(String(id)).delete();
+    setSync('live');
+  } catch(e) { showToast('⚠️ Cloud delete failed'); setSync('offline'); }
+}
+
+function startSync() {
+  if (!firebaseReady || !inventoryCol) return;
+  if (unsubscribe) unsubscribe();
+  setSync('saving');
+  unsubscribe = inventoryCol.orderBy('dateAdded', 'desc').onSnapshot((snapshot) => {
+    inventory = snapshot.docs.map(d => d.data());
+    saveLocal();
+    renderInventory();
+    renderHome();
+    setSync('live');
+  }, (err) => { setSync('offline'); });
+}
+
+function forceRefreshRadar() {
+  if (liveRadarData) delete liveRadarData[currentRadarCat];
+  fetchLiveRadar(currentRadarCat);
+}
+
+function manualRefresh() {
+  showToast('🔄 Refreshing...');
+  if (firebaseReady) startSync();
+  else { loadLocal(); renderInventory(); renderHome(); showToast('✅ Refreshed (local)'); }
+}
+
 
 // ── SCREENS ───────────────────────────────────────────────────────────────────
 function switchScreen(id, btn) {
@@ -292,7 +405,8 @@ function switchScreen(id, btn) {
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function renderHome() {
   const h = new Date().getHours();
-  document.getElementById('timeGreet').textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+  const greetEl = document.getElementById('timeGreet');
+  if (greetEl) greetEl.textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
   const sold = inventory.filter(i => i.status === 'sold');
   const listed = inventory.filter(i => i.status === 'listed');
   const profit = sold.reduce((s, i) => s + (i.soldPrice - i.buyPrice), 0);
@@ -357,10 +471,10 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function saveItem() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { showToast('Enter an item name'); return; }
-  inventory.unshift({ id: Date.now(), name, category: document.getElementById('f-cat').value, condition: document.getElementById('f-cond').value, buyPrice: parseFloat(document.getElementById('f-buy').value) || 0, listPrice: parseFloat(document.getElementById('f-list').value) || 0, soldPrice: null, source: document.getElementById('f-src').value, platform: document.getElementById('f-plat').value, soldPlatform: null, notes: document.getElementById('f-notes').value, status: 'bought', dateAdded: new Date().toISOString(), dateSold: null });
-  saveData(); closeModal('addModal'); renderInventory(); renderHome(); showToast('✅ Item added!');
+  const newItem = { id: Date.now(), name, category: document.getElementById('f-cat').value, condition: document.getElementById('f-cond').value, buyPrice: parseFloat(document.getElementById('f-buy').value) || 0, listPrice: parseFloat(document.getElementById('f-list').value) || 0, soldPrice: null, source: document.getElementById('f-src').value, platform: document.getElementById('f-plat').value, soldPlatform: null, notes: document.getElementById('f-notes').value, status: 'bought', dateAdded: new Date().toISOString(), dateSold: null, trackingNumber: '', carrier: '' };
+  saveItem_db(newItem); closeModal('addModal'); showToast('✅ Item added!');
 }
-function markListed(id) { const i = inventory.find(x => x.id === id); if (i) { i.status = 'listed'; saveData(); renderInventory(); showToast('📋 Marked as listed'); } }
+function markListed(id) { const i = inventory.find(x => x.id === id); if (i) { i.status = 'listed'; saveItem_db(i); showToast('📋 Marked as listed'); } }
 function openSellModal(id) {
   const i = inventory.find(x => x.id === id);
   if (!i) return;
@@ -382,13 +496,11 @@ function confirmSell() {
   i.carrier = document.getElementById('s-carrier').value;
   i.status = 'sold';
   i.dateSold = new Date().toISOString();
-  saveData();
+  saveItem_db(i);
   closeModal('sellModal');
-  renderInventory();
-  renderHome();
   showToast(`🎉 Sold! +$${(sp - i.buyPrice).toFixed(2)} profit`);
 }
-function deleteItem(id) { if (!confirm('Delete this item?')) return; inventory = inventory.filter(i => i.id !== id); saveData(); renderInventory(); renderHome(); }
+function deleteItem(id) { if (!confirm('Delete this item?')) return; deleteItem_db(id); }
 
 // ── TOOL PANEL ────────────────────────────────────────────────────────────────
 const TOOL_TITLES = { radar:'🔥 Resale Radar', listing:'✍️ Listing Generator', messages:'💬 Buyer Messages', fees:'💰 Fee Calculator', photos:'📸 Photo Checklist', shipping:'🚚 Shipping Calculator', auth:'🔍 Auth Checklists', calendar:'📅 Sourcing Calendar', compare:'🏷️ Platform Comparer', offers:'🤝 Offer Scripts' };
@@ -490,8 +602,147 @@ const RADAR_DATA = {
   ]
 };
 
+
+// ── RADAR LIVE DATA ───────────────────────────────────────────────────────────
+let liveRadarData = null;
+let currentRadarCat = 'all';
+const RADAR_REFRESH_DAYS = 7;
+
+async function loadRadarFromFirebase() {
+  if (!firebaseReady || !inventoryCol) return false;
+  try {
+    const db = firebase.firestore();
+    const doc = await db.collection('radar').doc('data').get();
+    if (!doc.exists) return false;
+    const data = doc.data();
+    const lastUpdated = data.lastUpdated ? data.lastUpdated.toDate() : null;
+    const daysSince = lastUpdated ? (Date.now() - lastUpdated.getTime()) / 86400000 : 999;
+    if (daysSince < RADAR_REFRESH_DAYS && data.items) {
+      liveRadarData = data.items;
+      return true;
+    }
+    return false;
+  } catch(e) { return false; }
+}
+
+async function saveRadarToFirebase(items) {
+  if (!firebaseReady || !inventoryCol) return;
+  try {
+    const db = firebase.firestore();
+    await db.collection('radar').doc('data').set({
+      items,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) {}
+}
+
+async function fetchLiveRadar(cat) {
+  const radarList = document.getElementById('radarList');
+  if (!radarList) return;
+
+  // Show loading
+  radarList.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--muted)">
+    <div style="width:36px;height:36px;border:3px solid rgba(32,178,170,0.2);border-top:3px solid var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 14px"></div>
+    <p style="font-size:14px;font-weight:600;color:var(--text)">Scanning live market data...</p>
+    <p style="font-size:12px;margin-top:4px">Pulling fresh trends for you</p>
+  </div>`;
+
+  try {
+    const catLabels = {
+      all: 'ALL categories — give a diverse mix across electronics, Disney collectibles, designer fashion, toys, antiques, and jewelry',
+      electronics: 'Electronics — retro gaming, vintage audio, cameras, calculators',
+      disney: 'Disney & Collectibles — pins, figurines, VHS, park exclusives, snowglobes',
+      designer: 'Designer & Fashion — handbags, vintage clothing, shoes, scarves',
+      toys: 'Toys & Games — LEGO, action figures, cards, vintage dolls',
+      antiques: 'Antiques & Vintage — Pyrex, cast iron, cameras, barware, tins',
+      jewelry: 'Jewelry — sterling silver, gold, costume, turquoise, vintage watches'
+    };
+
+    const prompt = `You are a resale market expert for 2025-2026. Return ONLY a valid JSON array of exactly 8 profitable items to flip at garage sales and flea markets. No markdown, no explanation, start with [ end with ].
+
+Category: ${catLabels[cat] || catLabels.all}
+
+Each item must have these exact fields:
+- n: item name (specific, e.g. "Nintendo DS Lite")
+- b: buy price range (e.g. "$5-$15 at garage sales")
+- s: sell price range (e.g. "$50-$110 online")
+- m: profit margin ("High", "Medium", or "Low")
+- demand: demand level (e.g. "Very High", "High", "Moderate")
+- speed: sell speed (e.g. "1-3 days", "1-2 weeks")
+- platforms: best platforms as string (e.g. "eBay · Mercari · Facebook Marketplace")
+- desc: 1-2 sentences on why it's hot right now in 2025-2026
+- tip: one specific actionable sourcing or selling tip
+- look: specific versions, brands, markings that command top dollar
+- avoid: specific dealbreakers that kill value`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        system: 'Return only valid JSON arrays. No markdown. No explanation. Start with [ end with ].',
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const text = (data.content?.find(b => b.type === 'text')?.text || '').trim();
+    const start = text.indexOf('[');
+    const end = text.lastIndexOf(']') + 1;
+    if (start === -1) throw new Error('No JSON');
+    const items = JSON.parse(text.slice(start, end));
+
+    // Cache all items in Firebase with category key
+    if (!liveRadarData) liveRadarData = {};
+    liveRadarData[cat] = items;
+    await saveRadarToFirebase(liveRadarData);
+
+    renderRadarItems(items);
+  } catch(e) {
+    // Fall back to hardcoded data
+    const items = RADAR_DATA[cat] || RADAR_DATA.all;
+    renderRadarItems(items);
+    if (radarList) {
+      const note = document.createElement('p');
+      note.style.cssText = 'font-size:11px;color:var(--muted);text-align:center;margin-top:8px';
+      note.textContent = 'Showing cached data — tap Refresh for live results';
+      radarList.appendChild(note);
+    }
+  }
+}
+
+function renderRadarItems(items) {
+  const radarList = document.getElementById('radarList');
+  if (!radarList) return;
+  radarList.innerHTML = items.map((item, i) => `
+    <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">
+        <div style="font-weight:800;font-size:15px;flex:1">#${i+1} ${item.n}</div>
+        <span style="background:var(--teal-soft);color:var(--teal);border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${item.m} Margin</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">${item.desc}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Buy For</div><div style="font-weight:800;font-size:14px">${item.b}</div></div>
+        <div style="background:rgba(74,222,128,0.08);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Sell For</div><div style="font-weight:800;font-size:14px;color:var(--green)">${item.s}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Demand</div><div style="font-weight:700;font-size:12px">${item.demand}</div></div>
+        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Sell Speed</div><div style="font-weight:700;font-size:12px">${item.speed}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">🛒 ${item.platforms}</div>
+      <div style="background:rgba(252,211,77,0.07);border:1px solid rgba(252,211,77,0.15);border-radius:8px;padding:9px 12px;font-size:12.5px;color:#fcd34d;margin-bottom:8px;line-height:1.5"><strong>💡 Pro Tip:</strong> ${item.tip}</div>
+      <div style="background:var(--teal-soft);border:1px solid rgba(32,178,170,0.2);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--teal);margin-bottom:8px;line-height:1.5"><strong>🔍 What to Look For:</strong> ${item.look}</div>
+      <div style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.15);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--red);line-height:1.5"><strong>⚠️ What to Avoid:</strong> ${item.avoid}</div>
+    </div>`).join('');
+}
+
 function buildRadar() {
-  return `<p style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a category to see what's hot and profitable right now.</p>
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <p style="font-size:13px;color:var(--muted)">Live AI trends · Auto-refreshes every 7 days</p>
+      <button onclick="forceRefreshRadar()" class="btn btn-sm btn-outline">↻ Refresh</button>
+    </div>
     <div class="filter-row" id="radarChips">
       <button class="chip active" onclick="showRadar('all',this)">🔥 All</button>
       <button class="chip" onclick="showRadar('electronics',this)">📱 Electronics</button>
@@ -506,6 +757,15 @@ function buildRadar() {
 function showRadar(cat, btn) {
   document.querySelectorAll('#radarChips .chip').forEach(c => c.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  currentRadarCat = cat;
+  // Use live cached data if available, otherwise fetch
+  if (liveRadarData && liveRadarData[cat]) {
+    renderRadarItems(liveRadarData[cat]);
+    return;
+  }
+  fetchLiveRadar(cat);
+}
+function _oldShowRadar_unused(cat) {
   const items = RADAR_DATA[cat] || RADAR_DATA.all;
   document.getElementById('radarList').innerHTML = items.map((item, i) => `
     <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:12px">
@@ -997,7 +1257,7 @@ function generateReport() {
   const profit = rev - cogs;
   const invested = unsold.reduce((s,i) => s+(i.buyPrice||0), 0);
   const roi = cogs > 0 ? ((profit/cogs)*100).toFixed(0) : 0;
-  document.getElementById('rTitle').textContent = `R&T Resale P&L · ${from.toLocaleDateString()} – ${to.toLocaleDateString()}`;
+  document.getElementById('rTitle').textContent = `Resale OS P&L · ${from.toLocaleDateString()} – ${to.toLocaleDateString()}`;
   document.getElementById('rStats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value" style="color:var(--green)">$${rev.toFixed(2)}</div><div class="stat-sub">${sold.length} sold</div></div>
     <div class="stat-card"><div class="stat-label">Net Profit</div><div class="stat-value" style="color:var(--teal)">$${profit.toFixed(2)}</div><div class="stat-sub">${roi}% ROI</div></div>
@@ -1014,7 +1274,7 @@ function generateReport() {
 }
 function exportCSV() {
   const d = window._rdata; if (!d) return;
-  const rows = [['R&T Resale OS — P&L Report'],[`Period: ${d.from.toLocaleDateString()} to ${d.to.toLocaleDateString()}`],[],['SUMMARY'],['Total Revenue','$'+d.rev.toFixed(2)],['Cost of Goods Sold','$'+d.cogs.toFixed(2)],['Net Profit','$'+d.profit.toFixed(2)],['ROI',d.roi+'%'],[],['SOLD ITEMS'],['Item','Category','Condition','Source','Platform','Date Sold','Buy Price','Sell Price','Profit','Carrier','Tracking Number'],...d.sold.map(i=>[i.name,i.category,i.condition,i.source,i.soldPlatform||'',i.dateSold?new Date(i.dateSold).toLocaleDateString():'',i.buyPrice,i.soldPrice,(i.soldPrice-i.buyPrice).toFixed(2),i.carrier||'',i.trackingNumber||'']),[],['UNSOLD INVENTORY'],['Item','Category','Status','Source','Platform','Date Added','Buy Price','List Price','Days'],...d.unsold.map(i=>[i.name,i.category,i.status,i.source,i.platform,new Date(i.dateAdded).toLocaleDateString(),i.buyPrice,i.listPrice||'',Math.floor((new Date()-new Date(i.dateAdded))/86400000)])];
+  const rows = [['Resale OS — P&L Report'],[`Period: ${d.from.toLocaleDateString()} to ${d.to.toLocaleDateString()}`],[],['SUMMARY'],['Total Revenue','$'+d.rev.toFixed(2)],['Cost of Goods Sold','$'+d.cogs.toFixed(2)],['Net Profit','$'+d.profit.toFixed(2)],['ROI',d.roi+'%'],[],['SOLD ITEMS'],['Item','Category','Condition','Source','Platform','Date Sold','Buy Price','Sell Price','Profit','Carrier','Tracking Number'],...d.sold.map(i=>[i.name,i.category,i.condition,i.source,i.soldPlatform||'',i.dateSold?new Date(i.dateSold).toLocaleDateString():'',i.buyPrice,i.soldPrice,(i.soldPrice-i.buyPrice).toFixed(2),i.carrier||'',i.trackingNumber||'']),[],['UNSOLD INVENTORY'],['Item','Category','Status','Source','Platform','Date Added','Buy Price','List Price','Days'],...d.unsold.map(i=>[i.name,i.category,i.status,i.source,i.platform,new Date(i.dateAdded).toLocaleDateString(),i.buyPrice,i.listPrice||'',Math.floor((new Date()-new Date(i.dateAdded))/86400000)])];
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -1023,11 +1283,13 @@ function exportCSV() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-loadData();
+loadLocal();
 renderHome();
 renderInventory();
 setRP('month');
-// Expose needed functions globally
+initFirebase(); // loads Firebase async, falls back to local if blocked
+
+// expose needed globals
 window.showRadar = showRadar;
 window.genListing = genListing;
 window.copyEl = copyEl;
@@ -1043,6 +1305,25 @@ window.resetAC = resetAC;
 window.comparePlatforms = comparePlatforms;
 window.toggleOffer = toggleOffer;
 window.genFromItem = genFromItem;
+window.switchScreen = switchScreen;
+window.openTool = openTool;
+window.closeTool = closeTool;
+window.overlayClose = overlayClose;
+window.openAddModal = openAddModal;
+window.closeModal = closeModal;
+window.saveItem = saveItem;
+window.markListed = markListed;
+window.openSellModal = openSellModal;
+window.confirmSell = confirmSell;
+window.deleteItem = deleteItem;
+window.setFilter = setFilter;
+window.setRP = setRP;
+window.generateReport = generateReport;
+window.exportCSV = exportCSV;
+window.manualRefresh = manualRefresh;
+window.forceRefreshRadar = forceRefreshRadar;
+window.showRadar = showRadar;
+
 </script>
 </body>
 </html>
