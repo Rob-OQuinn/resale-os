@@ -235,7 +235,7 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
     </div>
     <div class="fr2">
       <div class="fg"><label class="fl">Found At</label><select class="fi" id="f-src"><option>Garage Sale</option><option>Flea Market</option><option>Estate Sale</option><option>Thrift Store</option><option>Other</option></select></div>
-      <div class="fg"><label class="fl">Platform</label><select class="fi" id="f-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Multiple</option></select></div>
+      <div class="fg"><label class="fl">Platform</label><select class="fi" id="f-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option><option>Multiple</option></select></div>
     </div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="f-notes" placeholder="Flaws, markings, details..."></div>
     <div class="modal-actions">
@@ -252,7 +252,7 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
     <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px" id="sellInfo"></div>
     <div class="fr2">
       <div class="fg"><label class="fl">Sold Price ($)</label><input class="fi" type="number" id="s-price"></div>
-      <div class="fg"><label class="fl">Sold On</label><select class="fi" id="s-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option></select></div>
+      <div class="fg"><label class="fl">Sold On</label><select class="fi" id="s-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option></select></div>
     </div>
     <div class="fg"><label class="fl">Tracking Number (optional)</label><input class="fi" id="s-tracking" placeholder="e.g. 9400111899223456789012"></div>
     <div class="fg"><label class="fl">Carrier</label><select class="fi" id="s-carrier"><option value="">— Select if tracking added —</option><option>USPS</option><option>UPS</option><option>FedEx</option><option>Mercari Shipping</option><option>eBay Shipping</option><option>Poshmark Shipping</option></select></div>
@@ -760,7 +760,7 @@ function buildListing() {
     <div class="fg"><label class="fl">Describe what you found</label><textarea class="fi" id="ld" rows="3" placeholder="e.g. Vintage Coach leather bag, dark brown, brass hardware, Made in USA stamp inside..."></textarea></div>
     <div class="fr2">
       <div class="fg"><label class="fl">Category</label><select class="fi" id="lcat"><option>Electronics</option><option>Disney</option><option selected>Designer</option><option>Toys</option><option>Antiques</option><option>Jewelry</option><option>Other</option></select></div>
-      <div class="fg"><label class="fl">Platform</label><select class="fi" id="lplat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option></select></div>
+      <div class="fg"><label class="fl">Platform</label><select class="fi" id="lplat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option></select></div>
     </div>
     <div class="fr2">
       <div class="fg"><label class="fl">Condition</label><select class="fi" id="lcond"><option>Excellent — Like New</option><option selected>Good — Minor Wear</option><option>Fair — Visible Wear</option><option>For Parts / Repair</option></select></div>
@@ -946,7 +946,7 @@ function toggleMsg(i) { const b = document.getElementById('mbody'+i); const a = 
 function buildFees() {
   return `<div class="fg"><label class="fl">Sale Price ($)</label><input class="fi" type="number" id="fc-price" placeholder="75" oninput="calcFees()"></div>
     <div class="fr2">
-      <div class="fg"><label class="fl">Platform</label><select class="fi" id="fc-plat" onchange="calcFees()"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option></select></div>
+      <div class="fg"><label class="fl">Platform</label><select class="fi" id="fc-plat" onchange="calcFees()"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option></select></div>
       <div class="fg"><label class="fl">Shipping ($)</label><input class="fi" type="number" id="fc-ship" placeholder="6" oninput="calcFees()"></div>
     </div>
     <div class="fr2">
@@ -962,7 +962,7 @@ function calcFees() {
   const plat = document.getElementById('fc-plat').value;
   const bps = document.getElementById('fc-bps').value === 'yes';
   if (!price) return;
-  const feeMap = {eBay:0.1353,Mercari:0.10,'Facebook Marketplace':0.05};
+  const feeMap = {eBay:0.1353,Mercari:0.10,'Facebook Marketplace':0.05,Depop:0.10,Other:0.05};
   let fee = 0;
   if (plat === 'Poshmark') fee = price < 15 ? 2.95 : price * 0.20;
   else if (plat === 'Etsy') fee = price * 0.065 + 0.20 + price * 0.03;
@@ -1161,6 +1161,8 @@ function comparePlatforms() {
     {name:'Poshmark', fee: price < 15 ? 2.95 : price*0.20, ship:0, notes:'Best for clothing & bags. Buyer pays shipping.'},
     {name:'Etsy', fee: price*0.065+0.20+price*0.03, ship, notes:'Best for vintage, handmade, collectibles.'},
     {name:'Facebook Marketplace', fee: price*0.05, ship:0, notes:'Best for local pickup, bulky items.'},
+    {name:'Depop', fee: price*0.10, ship, notes:'Great for vintage clothing & streetwear. Young buyer base.'},
+    {name:'Other', fee: price*0.05, ship, notes:'Estimate only — adjust fee rate for your platform.'},
   ];
   const results = plats.map(p => ({...p, profit: price - p.fee - p.ship - cost})).sort((a,b) => b.profit - a.profit);
   document.getElementById('compRes').innerHTML = `
