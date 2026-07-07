@@ -230,7 +230,6 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
       <div class="fg"><label class="fl">Condition</label><select class="fi" id="f-cond"><option>Excellent</option><option selected>Good</option><option>Fair</option><option>For Parts</option></select></div>
     </div>
     <div class="fg"><label class="fl">Quantity</label><input class="fi" type="number" id="f-qty" placeholder="1" min="1" value="1"></div>
-    <div class="fg" style="margin-bottom:12px"><label class="fl">Quantity</label><input class="fi" type="number" id="f-qty" placeholder="1" min="1" value="1"></div>
     <div class="fr2">
       <div class="fg"><label class="fl">Buy Price Each ($)</label><input class="fi" type="number" id="f-buy" placeholder="5"></div>
       <div class="fg"><label class="fl">List Price Each ($)</label><input class="fi" type="number" id="f-list" placeholder="65"></div>
@@ -262,6 +261,35 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('sellModal')">Cancel</button>
       <button class="btn btn-green" onclick="confirmSell()">Confirm Sale 🎉</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit Item</div>
+    <input type="hidden" id="e-id">
+    <div class="fg"><label class="fl">Item Name</label><input class="fi" id="e-name"></div>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Category</label><select class="fi" id="e-cat"><option>Electronics</option><option>Disney</option><option>Designer</option><option>Toys</option><option>Antiques</option><option>Jewelry</option><option>Other</option></select></div>
+      <div class="fg"><label class="fl">Condition</label><select class="fi" id="e-cond"><option>Excellent</option><option>Good</option><option>Fair</option><option>For Parts</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Quantity</label><input class="fi" type="number" id="e-qty" placeholder="1" min="1"></div>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Buy Price Each ($)</label><input class="fi" type="number" id="e-buy"></div>
+      <div class="fg"><label class="fl">List Price Each ($)</label><input class="fi" type="number" id="e-list"></div>
+    </div>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Found At</label><select class="fi" id="e-src"><option>Garage Sale</option><option>Flea Market</option><option>Estate Sale</option><option>Thrift Store</option><option>Other</option></select></div>
+      <div class="fg"><label class="fl">Platform</label><select class="fi" id="e-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option><option>Multiple</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Status</label><select class="fi" id="e-status"><option value="bought">Bought</option><option value="listed">Listed</option><option value="sold">Sold</option></select></div>
+    <div class="fg"><label class="fl">Notes</label><input class="fi" id="e-notes" placeholder="Flaws, markings, details..."></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-teal" onclick="saveEdit()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -449,6 +477,7 @@ function renderInventory() {
       <div class="inv-actions">
         ${item.status === 'bought' ? `<button class="btn btn-sm btn-blue" onclick="markListed(${item.id})">Mark Listed</button>` : ''}
         ${item.status !== 'sold' ? `<button class="btn btn-sm btn-green" onclick="openSellModal(${item.id})">Mark Sold ✓</button>` : ''}
+        <button class="btn btn-sm btn-outline" onclick="editItem(${item.id})">✏️ Edit</button>
         <button class="btn btn-sm btn-pink" onclick="genFromItem(${item.id})">Gen Listing</button>
         <button class="btn btn-sm btn-red" onclick="deleteItem(${item.id})">Delete</button>
       </div>
@@ -1262,6 +1291,46 @@ function exportCSV() {
 }
 
 
+
+// ── EDIT ITEM ─────────────────────────────────────────────────────────────────
+function editItem(id) {
+  const item = inventory.find(x => x.id === id);
+  if (!item) return;
+  document.getElementById('e-id').value = id;
+  document.getElementById('e-name').value = item.name || '';
+  document.getElementById('e-cat').value = item.category || 'Other';
+  document.getElementById('e-cond').value = item.condition || 'Good';
+  document.getElementById('e-qty').value = item.quantityLeft || item.quantity || 1;
+  document.getElementById('e-buy').value = item.buyPrice || '';
+  document.getElementById('e-list').value = item.listPrice || '';
+  document.getElementById('e-src').value = item.source || 'Garage Sale';
+  document.getElementById('e-plat').value = item.platform || 'eBay';
+  document.getElementById('e-status').value = item.status || 'bought';
+  document.getElementById('e-notes').value = item.notes || '';
+  document.getElementById('editModal').classList.add('open');
+}
+
+function saveEdit() {
+  const id = parseInt(document.getElementById('e-id').value);
+  const item = inventory.find(x => x.id === id);
+  if (!item) return;
+  item.name = document.getElementById('e-name').value.trim();
+  item.category = document.getElementById('e-cat').value;
+  item.condition = document.getElementById('e-cond').value;
+  const newQty = parseInt(document.getElementById('e-qty').value) || 1;
+  item.quantity = newQty;
+  item.quantityLeft = newQty;
+  item.buyPrice = parseFloat(document.getElementById('e-buy').value) || 0;
+  item.listPrice = parseFloat(document.getElementById('e-list').value) || 0;
+  item.source = document.getElementById('e-src').value;
+  item.platform = document.getElementById('e-plat').value;
+  item.status = document.getElementById('e-status').value;
+  item.notes = document.getElementById('e-notes').value;
+  saveItem_db(item);
+  closeModal('editModal');
+  showToast('✅ Item updated!');
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadLocal();
 renderHome();
@@ -1301,6 +1370,8 @@ window.setRP = setRP;
 window.generateReport = generateReport;
 window.exportCSV = exportCSV;
 window.manualRefresh = manualRefresh;
+window.editItem = editItem;
+window.saveEdit = saveEdit;
 window.forceRefreshRadar = forceRefreshRadar;
 
 
