@@ -429,9 +429,15 @@ function renderHome() {
   if (greetEl) greetEl.textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
   const sold = inventory.filter(i => i.status === 'sold');
   const active = inventory.filter(i => i.status !== 'sold');
-  const profit = sold.reduce((s, i) => s + ((i.soldPrice - i.buyPrice) * (i.qtySold || 1)), 0);
+  // Profit: use soldPrice if available, fallback to lastSoldPrice. Use qtySold if set, else 1.
+  const profit = inventory.reduce((s, i) => {
+    const price = i.soldPrice || i.lastSoldPrice || 0;
+    const cost = i.buyPrice || 0;
+    const qty = i.qtySold || (i.status === 'sold' ? 1 : 0);
+    return s + ((price - cost) * qty);
+  }, 0);
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
-  const unitsSold = sold.reduce((s, i) => s + (i.qtySold || 1), 0);
+  const unitsSold = inventory.reduce((s, i) => s + (i.qtySold || (i.status === 'sold' ? 1 : 0)), 0);
   document.getElementById('homeStats').innerHTML =
     `<div class="qs"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(0)}</div><div class="qs-lbl">Profit</div></div>
      <div class="qs"><div class="qs-val" style="color:var(--teal)">${unitsLeft}</div><div class="qs-lbl">In Stock</div></div>
@@ -523,7 +529,7 @@ function confirmSell() {
   if (qtySell >= qtyLeft) {
     i.soldPrice = sp; i.status = 'sold'; i.dateSold = new Date().toISOString(); i.quantityLeft = 0;
   } else {
-    i.quantityLeft = qtyLeft - qtySell; i.lastSoldPrice = sp;
+    i.quantityLeft = qtyLeft - qtySell; i.lastSoldPrice = sp; i.soldPrice = sp;
   }
   saveItem_db(i);
   closeModal('sellModal');
@@ -1260,8 +1266,15 @@ function generateReport() {
   const period = inventory.filter(i => new Date(i.dateAdded) >= from && new Date(i.dateAdded) <= to);
   const sold = period.filter(i => i.status === 'sold');
   const unsold = period.filter(i => i.status !== 'sold');
-  const rev = sold.reduce((s,i) => s+(i.soldPrice||0), 0);
-  const cogs = sold.reduce((s,i) => s+(i.buyPrice||0), 0);
+  const rev = inventory.reduce((s,i) => {
+    const price = i.soldPrice || i.lastSoldPrice || 0;
+    const qty = i.qtySold || (i.status==='sold' ? 1 : 0);
+    return s + (price * qty);
+  }, 0);
+  const cogs = inventory.reduce((s,i) => {
+    const qty = i.qtySold || (i.status==='sold' ? 1 : 0);
+    return s + ((i.buyPrice||0) * qty);
+  }, 0);
   const profit = rev - cogs;
   const invested = unsold.reduce((s,i) => s+(i.buyPrice||0), 0);
   const roi = cogs > 0 ? ((profit/cogs)*100).toFixed(0) : 0;
