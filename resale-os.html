@@ -266,6 +266,27 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 </div>
 
 
+
+<!-- EDIT SALE MODAL -->
+<div class="modal-overlay" id="editSaleModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit Sale</div>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px" id="editSaleInfo"></div>
+    <input type="hidden" id="es-id">
+    <div class="fr2">
+      <div class="fg"><label class="fl">Sold Price Each ($)</label><input class="fi" type="number" id="es-price"></div>
+      <div class="fg"><label class="fl">Qty Sold</label><input class="fi" type="number" id="es-qty" min="1"></div>
+    </div>
+    <div class="fg"><label class="fl">Sold On</label><select class="fi" id="es-plat"><option>eBay</option><option>Mercari</option><option>Poshmark</option><option>Etsy</option><option>Facebook Marketplace</option><option>Depop</option><option>Other</option></select></div>
+    <div class="fg"><label class="fl">Tracking Number</label><input class="fi" id="es-tracking" placeholder="optional"></div>
+    <div class="fg"><label class="fl">Carrier</label><select class="fi" id="es-carrier"><option value="">— None —</option><option>USPS</option><option>UPS</option><option>FedEx</option><option>Mercari Shipping</option><option>eBay Shipping</option><option>Poshmark Shipping</option></select></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('editSaleModal')">Cancel</button>
+      <button class="btn btn-green" onclick="saveEditSale()">Save Sale</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT MODAL -->
 <div class="modal-overlay" id="editModal">
   <div class="modal">
@@ -439,8 +460,8 @@ function renderHome() {
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
   const unitsSold = inventory.reduce((s, i) => s + (i.qtySold || (i.status === 'sold' ? 1 : 0)), 0);
   document.getElementById('homeStats').innerHTML =
-    `<div class="qs"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(0)}</div><div class="qs-lbl">Profit</div></div>
-     <div class="qs"><div class="qs-val" style="color:var(--teal)">${unitsLeft}</div><div class="qs-lbl">In Stock</div></div>
+    `<div class="qs" onclick="goToSales()" style="cursor:pointer"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(0)}</div><div class="qs-lbl">Profit</div></div>
+     <div class="qs" onclick="goToInventory()" style="cursor:pointer"><div class="qs-val" style="color:var(--teal)">${unitsLeft}</div><div class="qs-lbl">In Stock</div></div>
      <div class="qs"><div class="qs-val" style="color:var(--pink)">${unitsSold}</div><div class="qs-lbl">Sold</div></div>`;
 }
 
@@ -456,7 +477,9 @@ function renderInventory() {
   const q = (document.getElementById('searchInput') || {}).value || '';
   const items = inventory.filter(i => {
     const ms = !q || i.name.toLowerCase().includes(q.toLowerCase()) || i.category.toLowerCase().includes(q.toLowerCase());
-    const mf = currentFilter === 'all' || i.status === currentFilter || i.category === currentFilter;
+    const mf = currentFilter === 'all' 
+      || (currentFilter === 'sold' && (i.status === 'sold' || (i.qtySold && i.qtySold > 0)))
+      || (currentFilter !== 'sold' && (i.status === currentFilter || i.category === currentFilter));
     return ms && mf;
   });
   const el = document.getElementById('inventoryList');
@@ -484,6 +507,7 @@ function renderInventory() {
         ${item.status === 'bought' ? `<button class="btn btn-sm btn-blue" onclick="markListed(${item.id})">Mark Listed</button>` : ''}
         ${item.status !== 'sold' ? `<button class="btn btn-sm btn-green" onclick="openSellModal(${item.id})">Mark Sold ✓</button>` : ''}
         <button class="btn btn-sm btn-outline" onclick="editItem(${item.id})">✏️ Edit</button>
+        ${(item.status === 'sold' || item.qtySold) ? `<button class="btn btn-sm btn-green" onclick="editSale(${item.id})">✏️ Edit Sale</button>` : ''}
         <button class="btn btn-sm btn-pink" onclick="genFromItem(${item.id})">Gen Listing</button>
         <button class="btn btn-sm btn-red" onclick="deleteItem(${item.id})">Delete</button>
       </div>
@@ -1305,6 +1329,54 @@ function exportCSV() {
 
 
 
+
+
+function goToInventory() {
+  const btn = document.querySelector('.bnav-btn:nth-child(2)');
+  switchScreen('inventory', btn);
+  setTimeout(function() { setFilter('all', document.querySelector('.filter-row .chip')); }, 100);
+}
+
+function goToSales() {
+  const btn = document.querySelector('.bnav-btn:nth-child(2)');
+  switchScreen('inventory', btn);
+  setTimeout(function() {
+    const soldChip = Array.from(document.querySelectorAll('.filter-row .chip')).find(c => c.textContent === 'Sold');
+    if (soldChip) setFilter('sold', soldChip);
+  }, 100);
+}
+
+// ── EDIT SALE ─────────────────────────────────────────────────────────────────
+function editSale(id) {
+  const item = inventory.find(x => x.id === id);
+  if (!item) return;
+  document.getElementById('es-id').value = id;
+  document.getElementById('es-price').value = item.soldPrice || item.lastSoldPrice || '';
+  document.getElementById('es-qty').value = item.qtySold || 1;
+  document.getElementById('es-plat').value = item.soldPlatform || 'eBay';
+  document.getElementById('es-tracking').value = item.trackingNumber || '';
+  document.getElementById('es-carrier').value = item.carrier || '';
+  document.getElementById('editSaleInfo').innerHTML = 
+    'Item: <strong style="color:var(--teal)">' + item.name + '</strong><br>' +
+    '<span style="color:var(--muted);font-size:12px">Bought for $' + item.buyPrice + ' each</span>';
+  document.getElementById('editSaleModal').classList.add('open');
+}
+
+function saveEditSale() {
+  const id = parseInt(document.getElementById('es-id').value);
+  const item = inventory.find(x => x.id === id);
+  if (!item) return;
+  item.soldPrice = parseFloat(document.getElementById('es-price').value) || 0;
+  item.qtySold = parseInt(document.getElementById('es-qty').value) || 1;
+  item.soldPlatform = document.getElementById('es-plat').value;
+  item.trackingNumber = document.getElementById('es-tracking').value.trim();
+  item.carrier = document.getElementById('es-carrier').value;
+  item.lastSoldPrice = item.soldPrice;
+  saveItem_db(item);
+  closeModal('editSaleModal');
+  showToast('✅ Sale updated!');
+}
+
 // ── EDIT ITEM ─────────────────────────────────────────────────────────────────
 function editItem(id) {
   const item = inventory.find(x => x.id === id);
@@ -1385,6 +1457,10 @@ window.exportCSV = exportCSV;
 window.manualRefresh = manualRefresh;
 window.editItem = editItem;
 window.saveEdit = saveEdit;
+window.editSale = editSale;
+window.saveEditSale = saveEditSale;
+window.goToInventory = goToInventory;
+window.goToSales = goToSales;
 window.forceRefreshRadar = forceRefreshRadar;
 
 
