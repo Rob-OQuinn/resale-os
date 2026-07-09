@@ -139,9 +139,7 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 <!-- SCREENS -->
 <div class="screen active" id="screen-home">
   <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>! 👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
-  <button onclick="debugSold()" class="btn btn-outline btn-sm" style="margin-bottom:10px;width:100%">🔍 Debug: Show Sold Data</button>
-  <div id="debugOut" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11px;font-family:monospace;word-break:break-all"></div>
-  <div class="quick-stats" id="homeStats"></div>
+    <div class="quick-stats" id="homeStats"></div>
   <div class="tools-label">Tools</div>
   <div class="tools-grid">
     <div class="tool-card ta" onclick="openTool('radar')"><div class="tool-icon">🔥</div><div class="tool-name">Resale Radar</div><div class="tool-desc">What's hot to flip right now</div></div>
@@ -454,9 +452,11 @@ function renderHome() {
   const active = inventory.filter(i => i.status !== 'sold');
   // Profit: use soldPrice if available, fallback to lastSoldPrice. Use qtySold if set, else 1.
   const profit = inventory.reduce((s, i) => {
-    const price = i.soldPrice || i.lastSoldPrice || 0;
+    if (i.status !== 'sold' && !i.qtySold && !i.lastSoldPrice) return s;
+    const price = (i.soldPrice !== null && i.soldPrice !== undefined && i.soldPrice !== 0) ? i.soldPrice : (i.lastSoldPrice || 0);
     const cost = i.buyPrice || 0;
     const qty = i.qtySold || (i.status === 'sold' ? 1 : 0);
+    if (!price || !qty) return s;
     return s + ((price - cost) * qty);
   }, 0);
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
