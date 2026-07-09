@@ -139,6 +139,8 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
 <!-- SCREENS -->
 <div class="screen active" id="screen-home">
   <div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:800">Good <span id="timeGreet"></span>! 👋</h2><p style="font-size:12px;color:var(--muted);margin-top:3px">Here's your business at a glance</p></div>
+  <button onclick="debugSold()" class="btn btn-outline btn-sm" style="margin-bottom:10px;width:100%">🔍 Debug: Show Sold Data</button>
+  <div id="debugOut" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11px;font-family:monospace;word-break:break-all"></div>
   <div class="quick-stats" id="homeStats"></div>
   <div class="tools-label">Tools</div>
   <div class="tools-grid">
@@ -452,18 +454,15 @@ function renderHome() {
   const active = inventory.filter(i => i.status !== 'sold');
   // Profit: use soldPrice if available, fallback to lastSoldPrice. Use qtySold if set, else 1.
   const profit = inventory.reduce((s, i) => {
-    // Skip items with no sales at all
-    if (i.status !== 'sold' && !i.qtySold && !i.lastSoldPrice) return s;
-    const price = parseFloat(i.soldPrice) || parseFloat(i.lastSoldPrice) || 0;
-    const cost = parseFloat(i.buyPrice) || 0;
-    const qty = parseInt(i.qtySold) || (i.status === 'sold' ? 1 : 0);
-    if (!price || !qty) return s;
+    const price = i.soldPrice || i.lastSoldPrice || 0;
+    const cost = i.buyPrice || 0;
+    const qty = i.qtySold || (i.status === 'sold' ? 1 : 0);
     return s + ((price - cost) * qty);
   }, 0);
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
   const unitsSold = inventory.reduce((s, i) => s + (i.qtySold || (i.status === 'sold' ? 1 : 0)), 0);
   document.getElementById('homeStats').innerHTML =
-    `<div class="qs" onclick="goToSales()" style="cursor:pointer" title="Tap to see sales"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(2)}</div><div class="qs-lbl">Profit</div></div>
+    `<div class="qs" onclick="goToSales()" style="cursor:pointer"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(0)}</div><div class="qs-lbl">Profit</div></div>
      <div class="qs" onclick="goToInventory()" style="cursor:pointer"><div class="qs-val" style="color:var(--teal)">${unitsLeft}</div><div class="qs-lbl">In Stock</div></div>
      <div class="qs"><div class="qs-val" style="color:var(--pink)">${unitsSold}</div><div class="qs-lbl">Sold</div></div>`;
 }
@@ -1349,6 +1348,24 @@ function goToSales() {
   }, 100);
 }
 
+
+function debugSold() {
+  const soldItems = inventory.filter(i => i.status === 'sold' || i.qtySold);
+  const out = document.getElementById('debugOut');
+  if (!soldItems.length) { out.style.display='block'; out.textContent='No sold items found in inventory array. Total items: '+inventory.length; return; }
+  out.style.display='block';
+  out.innerHTML = soldItems.map(i => 
+    '<div style="margin-bottom:8px;padding:8px;background:var(--bg2);border-radius:6px">'+
+    '<strong>'+i.name+'</strong><br>'+
+    'status: '+i.status+'<br>'+
+    'soldPrice: '+JSON.stringify(i.soldPrice)+'<br>'+
+    'lastSoldPrice: '+JSON.stringify(i.lastSoldPrice)+'<br>'+
+    'buyPrice: '+JSON.stringify(i.buyPrice)+'<br>'+
+    'qtySold: '+JSON.stringify(i.qtySold)+'<br>'+
+    'quantity: '+JSON.stringify(i.quantity)+'</div>'
+  ).join('') + '<div style="margin-top:8px;color:var(--teal)">Total inventory loaded: '+inventory.length+' items</div>';
+}
+
 // ── EDIT SALE ─────────────────────────────────────────────────────────────────
 function editSale(id) {
   const item = inventory.find(x => x.id === id);
@@ -1464,6 +1481,7 @@ window.editSale = editSale;
 window.saveEditSale = saveEditSale;
 window.goToInventory = goToInventory;
 window.goToSales = goToSales;
+window.debugSold = debugSold;
 window.forceRefreshRadar = forceRefreshRadar;
 
 
