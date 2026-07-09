@@ -452,15 +452,18 @@ function renderHome() {
   const active = inventory.filter(i => i.status !== 'sold');
   // Profit: use soldPrice if available, fallback to lastSoldPrice. Use qtySold if set, else 1.
   const profit = inventory.reduce((s, i) => {
-    const price = i.soldPrice || i.lastSoldPrice || 0;
-    const cost = i.buyPrice || 0;
-    const qty = i.qtySold || (i.status === 'sold' ? 1 : 0);
+    // Skip items with no sales at all
+    if (i.status !== 'sold' && !i.qtySold && !i.lastSoldPrice) return s;
+    const price = parseFloat(i.soldPrice) || parseFloat(i.lastSoldPrice) || 0;
+    const cost = parseFloat(i.buyPrice) || 0;
+    const qty = parseInt(i.qtySold) || (i.status === 'sold' ? 1 : 0);
+    if (!price || !qty) return s;
     return s + ((price - cost) * qty);
   }, 0);
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
   const unitsSold = inventory.reduce((s, i) => s + (i.qtySold || (i.status === 'sold' ? 1 : 0)), 0);
   document.getElementById('homeStats').innerHTML =
-    `<div class="qs" onclick="goToSales()" style="cursor:pointer"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(0)}</div><div class="qs-lbl">Profit</div></div>
+    `<div class="qs" onclick="goToSales()" style="cursor:pointer" title="Tap to see sales"><div class="qs-val" style="color:var(--green)">$${profit.toFixed(2)}</div><div class="qs-lbl">Profit</div></div>
      <div class="qs" onclick="goToInventory()" style="cursor:pointer"><div class="qs-val" style="color:var(--teal)">${unitsLeft}</div><div class="qs-lbl">In Stock</div></div>
      <div class="qs"><div class="qs-val" style="color:var(--pink)">${unitsSold}</div><div class="qs-lbl">Sold</div></div>`;
 }
