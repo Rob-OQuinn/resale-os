@@ -1301,16 +1301,15 @@ function generateReport() {
   const from = new Date(document.getElementById('rFrom').value || '2020-01-01');
   const to = new Date(document.getElementById('rTo').value || new Date()); to.setHours(23,59,59);
   const period = inventory.filter(i => new Date(i.dateAdded) >= from && new Date(i.dateAdded) <= to);
-  const sold = period.filter(i => i.status === 'sold');
-  const unsold = period.filter(i => i.status !== 'sold');
-  const rev = inventory.reduce((s,i) => {
-    const qty = parseInt(i.qtySold) || (i.status==='sold' ? 1 : 0);
-    if (!qty) return s;
+  const sold = period.filter(i => i.status === 'sold' || (i.qtySold && i.qtySold > 0));
+  const unsold = period.filter(i => i.status !== 'sold' && (!i.qtySold || i.qtySold === 0));
+  const rev = sold.reduce((s,i) => {
+    const qty = parseInt(i.qtySold) || 1;
     const price = parseFloat(i.soldPrice) > 0 ? parseFloat(i.soldPrice) : parseFloat(i.lastSoldPrice) || 0;
     return s + (price * qty);
   }, 0);
-  const cogs = inventory.reduce((s,i) => {
-    const qty = parseInt(i.qtySold) || (i.status==='sold' ? 1 : 0);
+  const cogs = sold.reduce((s,i) => {
+    const qty = parseInt(i.qtySold) || 1;
     return s + ((parseFloat(i.buyPrice)||0) * qty);
   }, 0);
   const profit = rev - cogs;
@@ -1318,7 +1317,7 @@ function generateReport() {
   const roi = cogs > 0 ? ((profit/cogs)*100).toFixed(0) : 0;
   document.getElementById('rTitle').textContent = `Resale OS P&L · ${from.toLocaleDateString()} – ${to.toLocaleDateString()}`;
   document.getElementById('rStats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value" style="color:var(--green)">$${rev.toFixed(2)}</div><div class="stat-sub">${sold.length} sold</div></div>
+    <div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value" style="color:var(--green)">$${rev.toFixed(2)}</div><div class="stat-sub">${sold.reduce((s,i)=>s+(parseInt(i.qtySold)||1),0)} units sold</div></div>
     <div class="stat-card"><div class="stat-label">Net Profit</div><div class="stat-value" style="color:var(--teal)">$${profit.toFixed(2)}</div><div class="stat-sub">${roi}% ROI</div></div>
     <div class="stat-card"><div class="stat-label">Cost of Goods</div><div class="stat-value" style="color:var(--red)">$${cogs.toFixed(2)}</div><div class="stat-sub">sold items only</div></div>
     <div class="stat-card"><div class="stat-label">Stock Value</div><div class="stat-value">$${invested.toFixed(2)}</div><div class="stat-sub">${unsold.length} unsold</div></div>`;
