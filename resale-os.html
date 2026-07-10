@@ -452,11 +452,13 @@ function renderHome() {
   const active = inventory.filter(i => i.status !== 'sold');
   // Profit: use soldPrice if available, fallback to lastSoldPrice. Use qtySold if set, else 1.
   const profit = inventory.reduce((s, i) => {
-    if (i.status !== 'sold' && !i.qtySold && !i.lastSoldPrice) return s;
-    const price = (i.soldPrice !== null && i.soldPrice !== undefined && i.soldPrice !== 0) ? i.soldPrice : (i.lastSoldPrice || 0);
-    const cost = i.buyPrice || 0;
-    const qty = i.qtySold || (i.status === 'sold' ? 1 : 0);
-    if (!price || !qty) return s;
+    // Only count items with actual sales
+    const qty = parseInt(i.qtySold) || (i.status === 'sold' ? 1 : 0);
+    if (!qty) return s;
+    // Use soldPrice first, fall back to lastSoldPrice (handles null soldPrice bug)
+    const price = parseFloat(i.soldPrice) > 0 ? parseFloat(i.soldPrice) : parseFloat(i.lastSoldPrice) || 0;
+    if (!price) return s;
+    const cost = parseFloat(i.buyPrice) || 0;
     return s + ((price - cost) * qty);
   }, 0);
   const unitsLeft = active.reduce((s, i) => s + (i.quantityLeft || i.quantity || 1), 0);
@@ -545,22 +547,31 @@ function confirmSell() {
   const i = inventory.find(x => x.id === sellTargetId);
   if (!i) return;
   const sp = parseFloat(document.getElementById('s-price').value) || 0;
+  if (!sp) { showToast('Enter a sold price'); return; }
   const sqEl = document.getElementById('s-qty');
   const qtySell = sqEl ? Math.max(1, parseInt(sqEl.value)||1) : 1;
-  const qtyLeft = i.quantityLeft || i.quantity || 1;
+  const qtyLeft = i.quantityLeft !== undefined && i.quantityLeft !== null ? i.quantityLeft : (i.quantity || 1);
+
+  // Always set both price fields to avoid null issues
+  i.soldPrice = sp;
+  i.lastSoldPrice = sp;
   i.soldPlatform = document.getElementById('s-plat').value;
   i.trackingNumber = document.getElementById('s-tracking').value.trim();
   i.carrier = document.getElementById('s-carrier').value;
-  i.qtySold = (i.qtySold||0) + qtySell;
+  i.qtySold = (i.qtySold || 0) + qtySell;
+
   if (qtySell >= qtyLeft) {
-    i.soldPrice = sp; i.status = 'sold'; i.dateSold = new Date().toISOString(); i.quantityLeft = 0;
+    i.status = 'sold';
+    i.dateSold = new Date().toISOString();
+    i.quantityLeft = 0;
   } else {
-    i.quantityLeft = qtyLeft - qtySell; i.lastSoldPrice = sp; i.soldPrice = sp;
+    i.quantityLeft = qtyLeft - qtySell;
   }
+
   saveItem_db(i);
   closeModal('sellModal');
-  const profit = (sp - i.buyPrice) * qtySell;
-  showToast('🎉 Sold ' + qtySell + ' unit' + (qtySell>1?'s':'') + ' · +$' + profit.toFixed(2) + ' profit');
+  const profit = (sp - (i.buyPrice || 0)) * qtySell;
+  showToast('🎉 Sold ' + qtySell + ' unit' + (qtySell > 1 ? 's' : '') + ' · +$' + profit.toFixed(2) + ' profit');
 }
 function deleteItem(id) { if (!confirm('Delete this item?')) return; deleteItem_db(id); }
 
@@ -1293,13 +1304,14 @@ function generateReport() {
   const sold = period.filter(i => i.status === 'sold');
   const unsold = period.filter(i => i.status !== 'sold');
   const rev = inventory.reduce((s,i) => {
-    const price = i.soldPrice || i.lastSoldPrice || 0;
-    const qty = i.qtySold || (i.status==='sold' ? 1 : 0);
+    const qty = parseInt(i.qtySold) || (i.status==='sold' ? 1 : 0);
+    if (!qty) return s;
+    const price = parseFloat(i.soldPrice) > 0 ? parseFloat(i.soldPrice) : parseFloat(i.lastSoldPrice) || 0;
     return s + (price * qty);
   }, 0);
   const cogs = inventory.reduce((s,i) => {
-    const qty = i.qtySold || (i.status==='sold' ? 1 : 0);
-    return s + ((i.buyPrice||0) * qty);
+    const qty = parseInt(i.qtySold) || (i.status==='sold' ? 1 : 0);
+    return s + ((parseFloat(i.buyPrice)||0) * qty);
   }, 0);
   const profit = rev - cogs;
   const invested = unsold.reduce((s,i) => s+(i.buyPrice||0), 0);
@@ -1314,7 +1326,7 @@ function generateReport() {
   document.getElementById('rCat').innerHTML = cats.length ? cats.map(cat => { const ci = sold.filter(i => i.category===cat); const cp = ci.reduce((s,i) => s+(i.soldPrice-i.buyPrice),0); return `<div class="recent-item"><div><div style="font-size:13px;font-weight:600">${cat}</div><div style="font-size:11px;color:var(--muted)">${ci.length} items</div></div><div style="color:var(--green);font-weight:700">$${cp.toFixed(2)}</div></div>`; }).join('') : '<p style="color:var(--muted);font-size:13px">No sales yet</p>';
   const plats = [...new Set(sold.map(i => i.soldPlatform).filter(Boolean))];
   document.getElementById('rPlat').innerHTML = plats.length ? plats.map(p => { const pi = sold.filter(i => i.soldPlatform===p); const pp = pi.reduce((s,i) => s+(i.soldPrice-i.buyPrice),0); return `<div class="recent-item"><div><div style="font-size:13px;font-weight:600">${p}</div><div style="font-size:11px;color:var(--muted)">${pi.length} sales</div></div><div style="color:var(--green);font-weight:700">$${pp.toFixed(2)}</div></div>`; }).join('') : '<p style="color:var(--muted);font-size:13px">No sales yet</p>';
-  document.getElementById('rItems').innerHTML = sold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Sold</th><th>Profit</th><th>Platform</th><th>Tracking</th></tr></thead><tbody>${sold.map(i => `<tr><td style="font-weight:600">${i.name}</td><td>$${i.buyPrice}</td><td>$${i.soldPrice}</td><td style="color:var(--green);font-weight:700">$${(i.soldPrice-i.buyPrice).toFixed(2)}</td><td>${i.soldPlatform||'—'}</td><td style="font-size:11px;color:var(--teal)">${i.trackingNumber ? (i.carrier ? i.carrier+': ' : '')+i.trackingNumber : '—'}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No items sold yet</p>';
+  document.getElementById('rItems').innerHTML = sold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Sold</th><th>Profit</th><th>Platform</th><th>Tracking</th></tr></thead><tbody>${sold.map(i => { const sp = parseFloat(i.soldPrice) > 0 ? i.soldPrice : (i.lastSoldPrice || 0); const qty = i.qtySold || 1; return `<tr><td style="font-weight:600">${i.name}${qty > 1 ? ' <span style="color:var(--teal);font-size:10px">x'+qty+'</span>' : ''}</td><td>$${i.buyPrice}</td><td>$${sp}</td><td style="color:var(--green);font-weight:700">$${((sp-(i.buyPrice||0))*qty).toFixed(2)}</td><td>${i.soldPlatform||'—'}</td><td style="font-size:11px;color:var(--teal)">${i.trackingNumber ? (i.carrier ? i.carrier+': ' : '')+i.trackingNumber : '—'}</td></tr>`; }).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No items sold yet</p>';
   document.getElementById('rUnsold').innerHTML = unsold.length ? `<table><thead><tr><th>Item</th><th>Paid</th><th>Status</th><th>Days</th></tr></thead><tbody>${unsold.map(i => { const days = Math.floor((new Date()-new Date(i.dateAdded))/86400000); return `<tr><td style="font-weight:600">${i.name}</td><td>$${i.buyPrice}</td><td>${i.status}</td><td style="color:${days>30?'var(--red)':days>14?'#fcd34d':'var(--muted)'};font-weight:700">${days}d</td></tr>`; }).join('')}</tbody></table>` : '<p style="color:var(--muted);font-size:13px">No unsold inventory</p>';
   document.getElementById('reportOut').style.display = 'block';
   window._rdata = {sold, unsold, rev, cogs, profit, roi, from, to};
@@ -1371,7 +1383,7 @@ function editSale(id) {
   const item = inventory.find(x => x.id === id);
   if (!item) return;
   document.getElementById('es-id').value = id;
-  document.getElementById('es-price').value = item.soldPrice || item.lastSoldPrice || '';
+  document.getElementById('es-price').value = (parseFloat(item.soldPrice) > 0 ? item.soldPrice : item.lastSoldPrice) || '';
   document.getElementById('es-qty').value = item.qtySold || 1;
   document.getElementById('es-plat').value = item.soldPlatform || 'eBay';
   document.getElementById('es-tracking').value = item.trackingNumber || '';
@@ -1386,12 +1398,31 @@ function saveEditSale() {
   const id = parseInt(document.getElementById('es-id').value);
   const item = inventory.find(x => x.id === id);
   if (!item) return;
-  item.soldPrice = parseFloat(document.getElementById('es-price').value) || 0;
-  item.qtySold = parseInt(document.getElementById('es-qty').value) || 1;
+  const newSoldPrice = parseFloat(document.getElementById('es-price').value) || 0;
+  const newQtySold = parseInt(document.getElementById('es-qty').value) || 1;
+  if (!newSoldPrice) { showToast('Enter a sold price'); return; }
+
+  // Update sale fields
+  item.soldPrice = newSoldPrice;
+  item.lastSoldPrice = newSoldPrice;
+  item.qtySold = newQtySold;
   item.soldPlatform = document.getElementById('es-plat').value;
   item.trackingNumber = document.getElementById('es-tracking').value.trim();
   item.carrier = document.getElementById('es-carrier').value;
-  item.lastSoldPrice = item.soldPrice;
+
+  // Recalculate quantityLeft from original quantity and new qtySold
+  const originalQty = item.quantity || 1;
+  const remaining = originalQty - newQtySold;
+  if (remaining <= 0) {
+    item.quantityLeft = 0;
+    item.status = 'sold';
+    if (!item.dateSold) item.dateSold = new Date().toISOString();
+  } else {
+    item.quantityLeft = remaining;
+    item.status = 'listed';
+    item.dateSold = null;
+  }
+
   saveItem_db(item);
   closeModal('editSaleModal');
   showToast('✅ Sale updated!');
