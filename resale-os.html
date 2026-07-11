@@ -771,15 +771,16 @@ async function fetchLiveRadar(cat) {
 
   } catch(e) {
     console.error('Radar fetch failed:', e);
-    // Fall back to hardcoded
-    const fallback = RADAR_DATA[cat] || RADAR_DATA.all;
-    renderRadarItems(fallback);
+    // Show error on screen so we can debug
     if (radarList) {
-      const note = document.createElement('p');
-      note.style.cssText = 'font-size:11px;color:var(--red);text-align:center;margin-top:8px';
-      note.textContent = '⚠️ Could not fetch live data — showing cached list. Tap ↻ Refresh to try again.';
-      radarList.appendChild(note);
+      radarList.innerHTML = '<div style="background:rgba(248,113,113,0.1);border-radius:10px;padding:16px;margin:10px 0;font-size:12px;color:var(--red)">' +
+        '<strong>⚠️ Radar Error:</strong><br>' + e.message + '</div>';
     }
+    // Fall back to hardcoded after showing error
+    setTimeout(function() {
+      const fallback = RADAR_DATA[cat] || RADAR_DATA.all;
+      renderRadarItems(fallback);
+    }, 3000);
   }
 }
 
