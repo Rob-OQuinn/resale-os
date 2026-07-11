@@ -746,12 +746,11 @@ async function fetchLiveRadar(cat) {
   const prompt = 'You are a resale market expert for 2025-2026. Return ONLY a valid JSON array of exactly 8 profitable items to flip at garage sales and flea markets. No markdown, no explanation, start with [ end with ].\n\nCategory: ' + (catLabels[cat] || catLabels.all) + '\n\nEach item must have exactly these fields:\n- n: item name\n- b: buy price range (e.g. "$5-$15")\n- s: sell price range (e.g. "$50-$110")\n- m: margin ("High", "Medium", or "Low")\n- demand: demand level\n- speed: sell speed\n- platforms: best platforms string\n- desc: 1-2 sentences why hot right now\n- tip: one actionable tip\n- look: what to look for\n- avoid: what to avoid';
 
   try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + RADAR_GEMINI_KEY, {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + RADAR_GEMINI_KEY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
+        contents: [{ parts: [{ text: prompt }] }]
       })
     });
 
