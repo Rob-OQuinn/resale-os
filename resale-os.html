@@ -678,137 +678,109 @@ const RADAR_DATA = {
 };
 
 
-// ── RADAR LIVE DATA ───────────────────────────────────────────────────────────
-let liveRadarData = null;
-let currentRadarCat = 'all';
+// ── RADAR LIVE DATA ─────────────────────────────────────────────────────────
+const RADAR_GEMINI_KEY = 'AIzaSyAQ-Ab8RN6KSkgIf4lUM-abjrUn8dZdONcCBTLHFKzk_O-tySQlgHQ';
 const RADAR_REFRESH_DAYS = 7;
+var liveRadarData = null;
+var currentRadarCat = 'all';
 
-async function loadRadarFromFirebase() {
-  if (!firebaseReady || !inventoryCol) return false;
+async function saveRadarToFirebase(data) {
   try {
-    const db = firebase.firestore();
-    const doc = await db.collection('radar').doc('data').get();
-    if (!doc.exists) return false;
-    const data = doc.data();
-    const lastUpdated = data.lastUpdated ? data.lastUpdated.toDate() : null;
-    const daysSince = lastUpdated ? (Date.now() - lastUpdated.getTime()) / 86400000 : 999;
-    if (daysSince < RADAR_REFRESH_DAYS && data.items) {
-      liveRadarData = data.items;
-      return true;
-    }
-    return false;
-  } catch(e) { return false; }
+    if (!_db) return;
+    await _db.collection('radar').doc('cache').set({ data: JSON.stringify(data), updated: Date.now() });
+  } catch(e) {}
 }
 
-async function saveRadarToFirebase(items) {
-  if (!firebaseReady || !inventoryCol) return;
+async function loadRadarFromFirebase() {
   try {
-    const db = firebase.firestore();
-    await db.collection('radar').doc('data').set({
-      items,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  } catch(e) {}
+    if (!_db) return null;
+    const doc = await _db.collection('radar').doc('cache').get();
+    if (!doc.exists) return null;
+    const d = doc.data();
+    const age = (Date.now() - d.updated) / 86400000;
+    if (age > RADAR_REFRESH_DAYS) return null; // stale
+    return JSON.parse(d.data);
+  } catch(e) { return null; }
+}
+
+function forceRefreshRadar() {
+  liveRadarData = null;
+  showToast('🔄 Fetching fresh radar data...');
+  fetchLiveRadar(currentRadarCat || 'all');
 }
 
 async function fetchLiveRadar(cat) {
   const radarList = document.getElementById('radarList');
   if (!radarList) return;
 
-  // Show loading
-  radarList.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--muted)">
-    <div style="width:36px;height:36px;border:3px solid rgba(32,178,170,0.2);border-top:3px solid var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 14px"></div>
-    <p style="font-size:14px;font-weight:600;color:var(--text)">Scanning live market data...</p>
-    <p style="font-size:12px;margin-top:4px">Pulling fresh trends for you</p>
-  </div>`;
+  radarList.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">' +
+    '<div style="width:36px;height:36px;border:3px solid rgba(32,178,170,0.2);border-top:3px solid var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 14px"></div>' +
+    '<p style="font-size:14px;font-weight:600;color:var(--text)">Scanning live market data...</p>' +
+    '<p style="font-size:12px;margin-top:4px;color:var(--muted)">Powered by Gemini AI</p></div>';
+
+  // Try Firebase cache first
+  if (!liveRadarData) {
+    const cached = await loadRadarFromFirebase();
+    if (cached) {
+      liveRadarData = cached;
+    }
+  }
+
+  // Use cache if available for this category
+  if (liveRadarData && liveRadarData[cat]) {
+    renderRadarItems(liveRadarData[cat]);
+    return;
+  }
+
+  // Fetch from Gemini
+  const catLabels = {
+    all: 'ALL categories — diverse mix of electronics, Disney collectibles, designer fashion, vintage toys, antiques, jewelry',
+    electronics: 'Electronics — retro gaming, vintage audio, cameras, calculators',
+    disney: 'Disney & Collectibles — pins, figurines, VHS, park exclusives, snowglobes',
+    designer: 'Designer & Fashion — handbags, vintage clothing, shoes, scarves',
+    toys: 'Toys & Games — LEGO, action figures, trading cards, vintage dolls',
+    antiques: 'Antiques & Vintage — Pyrex, cast iron, cameras, barware, tins',
+    jewelry: 'Jewelry — sterling silver, gold, costume, turquoise, vintage watches'
+  };
+
+  const prompt = 'You are a resale market expert for 2025-2026. Return ONLY a valid JSON array of exactly 8 profitable items to flip at garage sales and flea markets. No markdown, no explanation, start with [ end with ].\n\nCategory: ' + (catLabels[cat] || catLabels.all) + '\n\nEach item must have exactly these fields:\n- n: item name\n- b: buy price range (e.g. "$5-$15")\n- s: sell price range (e.g. "$50-$110")\n- m: margin ("High", "Medium", or "Low")\n- demand: demand level\n- speed: sell speed\n- platforms: best platforms string\n- desc: 1-2 sentences why hot right now\n- tip: one actionable tip\n- look: what to look for\n- avoid: what to avoid';
 
   try {
-    const catLabels = {
-      all: 'ALL categories — give a diverse mix across electronics, Disney collectibles, designer fashion, toys, antiques, and jewelry',
-      electronics: 'Electronics — retro gaming, vintage audio, cameras, calculators',
-      disney: 'Disney & Collectibles — pins, figurines, VHS, park exclusives, snowglobes',
-      designer: 'Designer & Fashion — handbags, vintage clothing, shoes, scarves',
-      toys: 'Toys & Games — LEGO, action figures, cards, vintage dolls',
-      antiques: 'Antiques & Vintage — Pyrex, cast iron, cameras, barware, tins',
-      jewelry: 'Jewelry — sterling silver, gold, costume, turquoise, vintage watches'
-    };
-
-    const prompt = `You are a resale market expert for 2025-2026. Return ONLY a valid JSON array of exactly 8 profitable items to flip at garage sales and flea markets. No markdown, no explanation, start with [ end with ].
-
-Category: ${catLabels[cat] || catLabels.all}
-
-Each item must have these exact fields:
-- n: item name (specific, e.g. "Nintendo DS Lite")
-- b: buy price range (e.g. "$5-$15 at garage sales")
-- s: sell price range (e.g. "$50-$110 online")
-- m: profit margin ("High", "Medium", or "Low")
-- demand: demand level (e.g. "Very High", "High", "Moderate")
-- speed: sell speed (e.g. "1-3 days", "1-2 weeks")
-- platforms: best platforms as string (e.g. "eBay · Mercari · Facebook Marketplace")
-- desc: 1-2 sentences on why it's hot right now in 2025-2026
-- tip: one specific actionable sourcing or selling tip
-- look: specific versions, brands, markings that command top dollar
-- avoid: specific dealbreakers that kill value`;
-
-    const GEMINI_KEY = 'AIzaSyAQ-Ab8RN6KSkgIf4lUM-abjrUn8dZdONcCBTLHFKzk_O-tySQlgHQ';
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY, {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + RADAR_GEMINI_KEY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Return ONLY a valid JSON array, no markdown, no explanation, start with [ end with ].\n\n' + prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
       })
     });
 
+    if (!res.ok) throw new Error('Gemini error: ' + res.status);
     const data = await res.json();
-    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const text = ((data.candidates || [])[0] || {content:{parts:[{text:''}]}}).content.parts[0].text.trim();
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']') + 1;
-    if (start === -1) throw new Error('No JSON from Gemini');
+    if (start === -1) throw new Error('No JSON array in response');
     const items = JSON.parse(text.slice(start, end));
+    if (!Array.isArray(items) || !items.length) throw new Error('Empty array');
 
-    // Cache all items in Firebase with category key
     if (!liveRadarData) liveRadarData = {};
     liveRadarData[cat] = items;
     await saveRadarToFirebase(liveRadarData);
+    renderRadarItems(items);
 
-    renderRadarItems(items);
   } catch(e) {
-    // Fall back to hardcoded data
-    const items = RADAR_DATA[cat] || RADAR_DATA.all;
-    renderRadarItems(items);
+    console.error('Radar fetch failed:', e);
+    // Fall back to hardcoded
+    const fallback = RADAR_DATA[cat] || RADAR_DATA.all;
+    renderRadarItems(fallback);
     if (radarList) {
       const note = document.createElement('p');
-      note.style.cssText = 'font-size:11px;color:var(--muted);text-align:center;margin-top:8px';
-      note.textContent = 'Showing cached data — tap Refresh for live results';
+      note.style.cssText = 'font-size:11px;color:var(--red);text-align:center;margin-top:8px';
+      note.textContent = '⚠️ Could not fetch live data — showing cached list. Tap ↻ Refresh to try again.';
       radarList.appendChild(note);
     }
   }
-}
-
-function renderRadarItems(items) {
-  const radarList = document.getElementById('radarList');
-  if (!radarList) return;
-  radarList.innerHTML = items.map((item, i) => `
-    <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">
-        <div style="font-weight:800;font-size:15px;flex:1">#${i+1} ${item.n}</div>
-        <span style="background:var(--teal-soft);color:var(--teal);border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${item.m} Margin</span>
-      </div>
-      <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">${item.desc}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
-        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Buy For</div><div style="font-weight:800;font-size:14px">${item.b}</div></div>
-        <div style="background:rgba(74,222,128,0.08);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Sell For</div><div style="font-weight:800;font-size:14px;color:var(--green)">${item.s}</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
-        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Demand</div><div style="font-weight:700;font-size:12px">${item.demand}</div></div>
-        <div style="background:var(--bg3);border-radius:6px;padding:7px 10px"><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px">Sell Speed</div><div style="font-weight:700;font-size:12px">${item.speed}</div></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">🛒 ${item.platforms}</div>
-      <div style="background:rgba(252,211,77,0.07);border:1px solid rgba(252,211,77,0.15);border-radius:8px;padding:9px 12px;font-size:12.5px;color:#fcd34d;margin-bottom:8px;line-height:1.5"><strong>💡 Pro Tip:</strong> ${item.tip}</div>
-      <div style="background:var(--teal-soft);border:1px solid rgba(32,178,170,0.2);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--teal);margin-bottom:8px;line-height:1.5"><strong>🔍 What to Look For:</strong> ${item.look}</div>
-      <div style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.15);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--red);line-height:1.5"><strong>⚠️ What to Avoid:</strong> ${item.avoid}</div>
-    </div>`).join('');
 }
 
 function buildRadar() {
